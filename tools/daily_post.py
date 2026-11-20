@@ -3,7 +3,8 @@
 
 하루 한 번 실행하면:
   1. 홈페이지에서 지점 정보 · 요금 · 사진 목록을 읽고
-  2. ai-photos/ 폴더의 AI 사진(있으면 우선)과 홈페이지 파티 사진으로 카드 7장을 만들고
+  2. ai-photos/ 폴더의 AI 사진(있으면 우선)과 홈페이지 파티 사진으로 카드를 만들고
+     (표지는 늘 같은 틀, 안쪽은 날마다 형식 순환: 지점 비교 → 한 지점 집중 → 파티 사진 모음)
   3. cards/<날짜>/ 에 저장해 GitHub에 올린 뒤
   4. 인스타그램에 캐러셀(여러 장) 게시물로 올립니다.
 
@@ -116,23 +117,26 @@ def ai_badge(d, x, y):
     d.text((x - 105, y - 22), 'AI 연출 이미지', font=font('SemiBold', 24), fill='white', anchor='mm')
 
 
-def pick_photos(day, photo_index):
-    """지점마다 사진 1장: ai-photos 의 해당 지점 사진을 우선, 없으면 홈페이지 파티 사진."""
-    theme = THEMES[day % len(THEMES)]
-    ai_files = sorted(glob.glob(os.path.join(ROOT, 'ai-photos', '*')))
-    ai_files = [f for f in ai_files if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))]
-    out = {}
-    for b in BRANCHES:
-        mine = [f for f in ai_files if os.path.basename(f).startswith(b['key'])]
-        themed = [f for f in mine if any(w in os.path.basename(f) for w in theme['words'])]
-        pool = themed or mine
-        if pool:
-            out[b['id']] = (pool[day % len(pool)], True)
-            continue
-        party = [p for p in photo_index.get(b['id'], {}).get('party', []) if p[1] / p[2] >= 1.25]
-        p = party[(day * 3 + len(b['id'])) % len(party)]
-        out[b['id']] = (fetch_photo(p[0]), False)
-    return out
+IMG_EXT = ('.jpg', '.jpeg', '.png', '.webp')
+
+
+def branch_pool(b, photo_index, theme, day):
+    """한 지점의 사진 목록 (fn, AI여부). AI 사진(그날 주제에 맞는 것 먼저) → 홈페이지 파티 사진 순."""
+    ai = sorted(f for f in glob.glob(os.path.join(ROOT, 'ai-photos', '*'))
+                if f.lower().endswith(IMG_EXT) and os.path.basename(f).startswith(b['key']))
+    themed = [f for f in ai if any(w in os.path.basename(f) for w in theme['words'])]
+    rest = [f for f in ai if f not in themed]
+    if rest: rest = rest[day % len(rest):] + rest[:day % len(rest)]
+    party = [p for p in photo_index.get(b['id'], {}).get('party', []) if p[1] / p[2] >= 1.25]
+    if party:
+        k = (day * 3 + len(b['id'])) % len(party); party = party[k:] + party[:k]
+    return [(f, True) for f in themed + rest] + [(('site', p[0]), False) for p in party]
+
+
+def load(item):
+    fn, is_ai = item
+    if isinstance(fn, tuple): fn = fetch_photo(fn[1])
+    return fn, is_ai
 
 
 def price_line(b, cfg, date):
@@ -144,81 +148,222 @@ def price_line(b, cfg, date):
     return f'{date.month}월 평일 나이트 {night // 10000}만원~'
 
 
-def make_cards(date, outdir):
-    cfg = get_json(f'{SITE}/api/config')
-    photo_index = get_json(f'{SITE}/photos/index.json')
-    day = date.toordinal()
-    theme = THEMES[day % len(THEMES)]
-    photos = pick_photos(day, photo_index)
-    os.makedirs(outdir, exist_ok=True)
-    n = len(BRANCHES) + 2
-
-    # 1. 표지: 그날 첫 지점 사진
-    cover_b = BRANCHES[day % len(BRANCHES)]
-    fn, is_ai = photos[cover_b['id']]
+# ---- 카드 종류 ----
+def card_cover(item, i, n, badge, title, sub):
+    """표지: 모든 게시물이 같은 틀 (피드 통일감)."""
+    fn, is_ai = load(item)
     im = shade(shade(crop(fn, W, H), 380, H, 250), 0, 170, 170, reverse=True)
-    d = ImageDraw.Draw(im); header(d, 1, n)
-    bw = int(d.textlength(theme['badge'], font=font('Bold', 32))) + 60
+    d = ImageDraw.Draw(im); header(d, i, n)
+    bw = int(d.textlength(badge, font=font('Bold', 32))) + 60
     d.rounded_rectangle([60, 760, 60 + bw, 820], radius=30, fill=GOLD)
-    d.text((60 + bw // 2, 790), theme['badge'], font=font('Bold', 32), fill=GREEN, anchor='mm')
-    d.text((60, 850), theme['title'], font=font('ExtraBold', 108), fill='white', spacing=14)
-    d.text((60, 1120), f'서울 {len(BRANCHES)}개 지점 · 단독 대관 파티룸 한눈에 보기', font=font('Medium', 38), fill=MINT)
+    d.text((60 + bw // 2, 790), badge, font=font('Bold', 32), fill=GREEN, anchor='mm')
+    d.text((60, 850), title, font=font('ExtraBold', 108), fill='white', spacing=14)
+    d.text((60, 1120), sub, font=font('Medium', 38), fill=MINT)
     d.text((60, 1230), '옆으로 넘겨 보세요  →', font=font('SemiBold', 34), fill='white')
     if is_ai: ai_badge(d, W - 60, 1270)
-    im.convert('RGB').save(os.path.join(outdir, '01.jpg'), quality=90)
+    return im
 
-    # 2~6. 지점 카드
-    for k, b in enumerate(BRANCHES, start=2):
-        fn, is_ai = photos[b['id']]
-        im = Image.new('RGB', (W, H), CREAM); im.paste(crop(fn, W, 720), (0, 0))
-        im = shade(shade(im, 420, 720, 170), 0, 170, 170, reverse=True)
-        d = ImageDraw.Draw(im); header(d, k, n)
-        d.text((60, 600), b['name'], font=font('ExtraBold', 96), fill='white', anchor='ls')
-        d.text((60, 660), b['loc'], font=font('SemiBold', 36), fill=MINT, anchor='ls')
-        if is_ai: ai_badge(d, W - 40, 700)
-        y = 780
-        d.text((60, y), b['cap'], font=font('Bold', 44), fill=GREEN); y += 90
-        for f in b['feats']:
-            d.ellipse([62, y + 14, 80, y + 32], fill=(46, 140, 100))
-            d.text((100, y), f, font=font('Medium', 38), fill=(40, 48, 44)); y += 70
-        d.rounded_rectangle([60, 1150, W - 60, 1270], radius=28, fill=GREEN)
-        d.text((W // 2, 1210), price_line(b, cfg, date), font=font('Bold', 44), fill=GOLD, anchor='mm')
-        im.convert('RGB').save(os.path.join(outdir, f'{k:02d}.jpg'), quality=90)
 
-    # 마지막: 예약 안내 (표지와 다른 지점 사진)
-    last_b = BRANCHES[(day + 2) % len(BRANCHES)]
-    fn, is_ai = photos[last_b['id']]
+def card_branch(item, i, n, b, cfg, date):
+    fn, is_ai = load(item)
+    im = Image.new('RGB', (W, H), CREAM); im.paste(crop(fn, W, 720), (0, 0))
+    im = shade(shade(im, 420, 720, 170), 0, 170, 170, reverse=True)
+    d = ImageDraw.Draw(im); header(d, i, n)
+    d.text((60, 600), b['name'], font=font('ExtraBold', 96), fill='white', anchor='ls')
+    d.text((60, 660), b['loc'], font=font('SemiBold', 36), fill=MINT, anchor='ls')
+    if is_ai: ai_badge(d, W - 40, 700)
+    y = 780
+    d.text((60, y), b['cap'], font=font('Bold', 44), fill=GREEN); y += 90
+    for f in b['feats']:
+        d.ellipse([62, y + 14, 80, y + 32], fill=(46, 140, 100))
+        d.text((100, y), f, font=font('Medium', 38), fill=(40, 48, 44)); y += 70
+    d.rounded_rectangle([60, 1150, W - 60, 1270], radius=28, fill=GREEN)
+    d.text((W // 2, 1210), price_line(b, cfg, date), font=font('Bold', 44), fill=GOLD, anchor='mm')
+    return im
+
+
+def card_photo(item, i, n, label=None):
+    """사진만 크게. 아래에 작은 지점 이름표."""
+    fn, is_ai = load(item)
+    im = shade(crop(fn, W, H), 0, 170, 150, reverse=True)
+    if label: im = shade(im, H - 260, H, 200)
+    d = ImageDraw.Draw(im); header(d, i, n)
+    if label:
+        d.text((60, H - 70), label, font=font('Bold', 46), fill='white', anchor='ls')
+    if is_ai: ai_badge(d, W - 60, H - 50)
+    return im
+
+
+def card_cta(item, i, n):
+    fn, is_ai = load(item)
     im = shade(shade(crop(fn, W, H), 300, H, 250), 0, 170, 170, reverse=True)
-    d = ImageDraw.Draw(im); header(d, n, n)
+    d = ImageDraw.Draw(im); header(d, i, n)
     d.text((60, 760), '연말 모임은\n아일랜드이너프\n파티룸에서', font=font('ExtraBold', 96), fill='white', spacing=12)
     d.text((60, 1090), '· 음식·주류·배달 자유 반입   · 공간 전체 단독 이용', font=font('Medium', 34), fill=MINT)
     d.text((60, 1140), '· 평일(월~목) 할인   · 주말은 빠르게 마감 중', font=font('Medium', 34), fill=MINT)
     d.rounded_rectangle([60, 1210, W - 60, 1300], radius=45, fill=GOLD)
     d.text((W // 2, 1255), '예약  islandenoughpartyroom.com', font=font('Bold', 40), fill=GREEN, anchor='mm')
     if is_ai: ai_badge(d, W - 60, 740)
-    im.convert('RGB').save(os.path.join(outdir, f'{n:02d}.jpg'), quality=90)
+    return im
 
-    caption = make_caption(theme, cfg, date, any(v[1] for v in photos.values()))
+
+# ---- 게시물 형식 (날마다 순환) ----
+FORMATS = ['compare', 'branch', 'gallery', 'saving']
+
+# 비용 비교 콘텐츠: 밖에서 하는 회식 (서울 강남권 예시 금액, 20명 기준)
+SAVING_PEOPLE = 20
+OUTSIDE = [  # (단계, 내용, 1인 예시 금액)
+    ('1차 고깃집', '삼겹살·목살 + 소주·맥주 + 식사', 50000),
+    ('2차 맥주집', '생맥주 + 안주', 25000),
+    ('3차 노래방', '대형룸 2시간 + 음료', 7500),
+]
+INSIDE_FOOD = 25000   # 배달 음식 1인 예시 (족발·보쌈·치킨·피자 등)
+INSIDE_DRINK = 10000  # 마트 주류 1인 예시
+
+
+def won_k(v):
+    return f'{v:,}원'
+
+
+def text_card(i, n, title, rows, total_label, total, note=None, accent=GREEN):
+    im = Image.new('RGBA', (W, H), CREAM)
+    d = ImageDraw.Draw(im)
+    d.rectangle([0, 0, W, 170], fill=GREEN); header(d, i, n)
+    d.text((60, 250), title, font=font('ExtraBold', 76), fill=accent)
+    y = 400
+    for name, desc, amt in rows:
+        d.text((60, y), name, font=font('Bold', 46), fill=(30, 40, 35))
+        d.text((W - 60, y), amt, font=font('Bold', 46), fill=(30, 40, 35), anchor='ra')
+        d.text((60, y + 62), desc, font=font('Medium', 32), fill=(110, 120, 115))
+        y += 150
+        d.line([(60, y - 30), (W - 60, y - 30)], fill=(220, 215, 205), width=2)
+    d.rounded_rectangle([60, 1060, W - 60, 1200], radius=28, fill=accent)
+    d.text((100, 1130), total_label, font=font('Bold', 42), fill='white', anchor='lm')
+    d.text((W - 100, 1130), total, font=font('ExtraBold', 56), fill=GOLD, anchor='rm')
+    if note:
+        d.text((60, 1250), note, font=font('Medium', 26), fill=(130, 135, 130))
+    return im
+
+
+def saving_numbers(cfg, date, branch_id='yeoksam'):
+    c = next(x for x in cfg['branches'] if x['id'] == branch_id)
+    peak = date.month in cfg.get('peakMonths', [])
+    room = c['prices']['peak' if peak else 'normal']['night'][0]
+    extra = max(0, SAVING_PEOPLE - cfg['baseHeadcount']) * cfg['extraPerPerson']
+    out_rows = [(a, b, v * SAVING_PEOPLE) for a, b, v in OUTSIDE]
+    in_rows = [('파티룸 대관', f"{date.month}월 평일 나이트 5시간 · 단독 이용", room),
+               ('인원 추가', f"{cfg['baseHeadcount']}인 초과 {SAVING_PEOPLE - cfg['baseHeadcount']}명 × {cfg['extraPerPerson']:,}원", extra),
+               ('배달 음식', '족발·보쌈·치킨·피자 등', INSIDE_FOOD * SAVING_PEOPLE),
+               ('주류', '마트에서 구입', INSIDE_DRINK * SAVING_PEOPLE)]
+    return out_rows, in_rows
+
+
+def make_cards(date, outdir):
+    cfg = get_json(f'{SITE}/api/config')
+    photo_index = get_json(f'{SITE}/photos/index.json')
+    day = date.toordinal()
+    theme = THEMES[day % len(THEMES)]
+    fmt = FORMATS[day % len(FORMATS)]
+    pools = {b['id']: branch_pool(b, photo_index, theme, day) for b in BRANCHES}
+    focus = BRANCHES[(day // len(FORMATS)) % len(BRANCHES)]  # branch 형식에서 소개할 지점
+    used = []
+
+    def take(b, k=0):
+        item = pools[b['id']][min(k, len(pools[b['id']]) - 1)]
+        used.append(item); return item
+
+    slides = []
+    if fmt == 'compare':  # 5개 지점 비교 카드뉴스
+        cover = BRANCHES[day % len(BRANCHES)]
+        slides.append(lambda i, n: card_cover(take(cover, 1), i, n, theme['badge'], theme['title'],
+                                              f'서울 {len(BRANCHES)}개 지점 · 단독 대관 파티룸 한눈에 보기'))
+        for b in BRANCHES:
+            slides.append(lambda i, n, b=b: card_branch(take(b), i, n, b, cfg, date))
+        last = BRANCHES[(day + 2) % len(BRANCHES)]
+        slides.append(lambda i, n: card_cta(take(last, 2), i, n))
+    elif fmt == 'branch':  # 한 지점 집중 소개
+        b = focus
+        slides.append(lambda i, n: card_cover(take(b, 0), i, n, theme['badge'], theme['title'],
+                                              f"{b['name']} · {b['loc']}"))
+        for k in range(1, 5):
+            slides.append(lambda i, n, k=k: card_photo(take(b, k), i, n))
+        slides.append(lambda i, n: card_branch(take(b, 5), i, n, b, cfg, date))
+        slides.append(lambda i, n: card_cta(take(b, 6), i, n))
+    elif fmt == 'saving':  # 회식 비용 비교
+        out_rows, in_rows = saving_numbers(cfg, date)
+        o, p_ = sum(r[2] for r in out_rows), sum(r[2] for r in in_rows)
+        yk = next(b for b in BRANCHES if b['id'] == 'yeoksam')
+        slides.append(lambda i, n: card_cover(take(yk, 0), i, n, '회식비 절약 팁',
+                                              f'회식 1·2·3차,\n파티룸 한 번에!', f'{SAVING_PEOPLE}명 기준 비용 비교'))
+        slides.append(lambda i, n: text_card(i, n, '밖에서 회식하면?', [(a, b, won_k(v)) for a, b, v in out_rows],
+                                             f'{SAVING_PEOPLE}명 합계', won_k(o), '※ 서울 강남권 일반적인 가격을 기준으로 한 예시이며, 실제 금액은 매장마다 다릅니다.', (150, 70, 50)))
+        slides.append(lambda i, n: text_card(i, n, '파티룸에서 하면?', [(a, b, won_k(v)) for a, b, v in in_rows],
+                                             f'{SAVING_PEOPLE}명 합계', won_k(p_), f"※ 아일랜드이너프 역삼점 기준 · 보증금 {cfg['deposit']:,}원 별도(이용 후 반환)"))
+        def result(i, n):
+            im = Image.new('RGBA', (W, H), GREEN); d = ImageDraw.Draw(im); header(d, i, n)
+            d.text((60, 300), '이만큼 아껴요', font=font('Bold', 56), fill=MINT)
+            d.text((60, 380), won_k(o - p_), font=font('ExtraBold', 150), fill=GOLD)
+            d.text((60, 580), f'1인당 약 {(o - p_) // SAVING_PEOPLE // 1000 * 1000:,}원 절약 ({round((o - p_) / o * 100)}%)', font=font('Bold', 48), fill='white')
+            y = 760
+            for t in ['이동 없이 한 공간에서 1·2·3차 끝', '노래 · 빔프로젝터 · 게임 무료', '우리 팀만 쓰는 단독 공간', '5시간 통째로 우리끼리']:
+                d.ellipse([62, y + 14, 82, y + 34], fill=GOLD); d.text((104, y), t, font=font('Medium', 42), fill='white'); y += 80
+            return im
+        slides.append(result)
+        slides.append(lambda i, n: card_cta(take(yk, 2), i, n))
+    else:  # gallery: 여러 지점 파티 사진 모음
+        cover = BRANCHES[day % len(BRANCHES)]
+        slides.append(lambda i, n: card_cover(take(cover, 0), i, n, theme['badge'], theme['title'],
+                                              '아일랜드이너프에서 열린 파티들'))
+        for j in range(5):
+            b = BRANCHES[(day + j) % len(BRANCHES)]
+            slides.append(lambda i, n, b=b, j=j: card_photo(take(b, 1 + (j == 0)), i, n, b['name']))
+        last = BRANCHES[(day + 3) % len(BRANCHES)]
+        slides.append(lambda i, n: card_cta(take(last, 3), i, n))
+
+    os.makedirs(outdir, exist_ok=True)
+    for old in glob.glob(os.path.join(outdir, '*.jpg')): os.remove(old)
+    n = len(slides)
+    for i, make in enumerate(slides, start=1):
+        make(i, n).convert('RGB').save(os.path.join(outdir, f'{i:02d}.jpg'), quality=90)
+
+    caption = make_caption(fmt, focus, theme, any(u[1] for u in used))
     with open(os.path.join(outdir, 'caption.txt'), 'w', encoding='utf-8') as f:
         f.write(caption)
+    log('format:', fmt, '| theme:', theme['badge'], '| focus:', focus['name'] if fmt == 'branch' else '-')
     return n, caption
 
 
-def make_caption(theme, cfg, date, has_ai):
-    lines = [theme['intro'], '아일랜드이너프 서울 5개 지점을 한눈에 비교해 보세요 👉', '']
-    for b in BRANCHES:
-        lines.append(f"📍 {b['name']} | {b['loc']} | {b['cap']}")
+def make_caption(fmt, focus, theme, has_ai):
+    if fmt == 'saving':
+        lines = ['💸 회식 1차 고깃집, 2차 맥주집, 3차 노래방…',
+                 f'{SAVING_PEOPLE}명이면 비용이 얼마나 나올까요? 파티룸 한 곳에서 해결하면 얼마나 아낄 수 있는지 비교해 봤어요 👉', '',
+                 '✔ 배달 음식 · 마트 주류로 비용은 줄이고',
+                 '✔ 노래 · 빔프로젝터 · 게임은 무료로',
+                 '✔ 이동 없이 우리 팀만의 공간에서 5시간',
+                 '', '※ 밖에서 회식 금액은 서울 강남권 일반적인 가격을 기준으로 한 예시입니다.']
+        branch_tags = ['회식장소', '회식', '역삼파티룸', '선릉파티룸']
+    elif fmt == 'branch':
+        b = focus
+        lines = [theme['intro'], f"오늘은 {b['name']}을 소개합니다 👉", '',
+                 f"📍 {b['loc']}", f"👥 {b['cap']}"] + [f'✔ {f}' for f in b['feats']]
+        branch_tags = b['tags']
+    else:
+        lines = [theme['intro'],
+                 '아일랜드이너프 서울 5개 지점을 한눈에 비교해 보세요 👉' if fmt == 'compare'
+                 else '아일랜드이너프에서 열린 파티들을 모아 봤어요 👉', '']
+        for b in BRANCHES:
+            lines.append(f"📍 {b['name']} | {b['loc']}")
+        branch_tags = [t for b in BRANCHES for t in b['tags']]
     lines += ['',
               '✔ 예약한 시간 동안 공간 전체를 우리 일행만 단독 이용',
               '✔ 음식 · 주류 · 배달 자유롭게 반입',
-              '✔ 빔프로젝터 · 무선 마이크 · 보드게임 무료',
               '✔ 평일(월~목) 할인 · 주말은 빠르게 마감 중',
               '',
               '연말 모임은 아일랜드이너프 파티룸에서 🥂',
               '예약은 프로필 링크 → islandenoughpartyroom.com']
     if has_ai:
         lines += ['', '※ 일부 사진은 실제 매장 사진을 바탕으로 만든 AI 연출 이미지입니다.']
-    tags = list(dict.fromkeys(COMMON_TAGS + theme['tags'] + [t for b in BRANCHES for t in b['tags']]))[:28]
+    tags = list(dict.fromkeys(COMMON_TAGS + theme['tags'] + branch_tags))[:28]
     lines += ['', ' '.join('#' + t for t in tags)]
     return '\n'.join(lines)
 
