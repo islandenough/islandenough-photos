@@ -264,6 +264,11 @@ def make_cards(date, outdir):
     day = date.toordinal()
     theme = THEMES[day % len(THEMES)]
     fmt = FORMATS[day % len(FORMATS)]
+    # 표지 지점의 AI 사진 장면이 그날 주제와 다르면, 사진 장면에 맞는 주제로 바꾼다
+    lead = BRANCHES[(day // len(FORMATS)) % len(BRANCHES)] if fmt == 'branch' else BRANCHES[day % len(BRANCHES)]
+    names = [os.path.basename(f) for f in glob.glob(os.path.join(ROOT, 'ai-photos', lead['key'] + '*'))]
+    if fmt != 'saving' and names and not any(w in n for n in names for w in theme['words']):
+        theme = next((t for t in THEMES if any(w in n for n in names for w in t['words'])), theme)
     pools = {b['id']: branch_pool(b, photo_index, theme, day) for b in BRANCHES}
     focus = BRANCHES[(day // len(FORMATS)) % len(BRANCHES)]  # branch 형식에서 소개할 지점
     used = []
