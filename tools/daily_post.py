@@ -36,15 +36,14 @@ GREEN = (20, 58, 44); MINT = (170, 230, 200); CREAM = (250, 247, 240); GOLD = (2
 BRANCHES = [
     dict(id='yangjae', name='양재점', key='양재', loc='양재역 1번 출구 도보 3분', cap='최대 40명 · 실내 30평 + 테라스',
          feats=['120인치 빔프로젝터 · 미러볼 클럽 조명', '다트 · 미니 당구대 · 피아노', '와인냉장고 · 테라스 흡연 공간'], tags=['양재파티룸']),
-    dict(id='yeoksam', name='역삼점', key='역삼', loc='선릉역 5번 출구 도보 5분', cap='최대 72명 · 약 40평 (최대 규모)',
+    dict(id='yeoksam', name='역삼점', key='역삼', loc='선릉역 5번 출구 도보 5분', cap='최대 72명 · 약 40평',
          feats=['회사 송년회 · 대규모 단체 모임', '100인치 빔프로젝터 · 미니 당구대', '매장 내 남녀 화장실 구분'], tags=['역삼파티룸', '선릉파티룸']),
     dict(id='dosan', name='도산공원점', key='도산', loc='압구정로데오역 5번 출구 도보 5분', cap='최대 30명 · 약 25평',
          feats=['섬을 닮은 감성 인테리어 · 포토존', '120인치 빔프로젝터', '발렛 주차 가능 (대당 2만원)'], tags=['도산공원파티룸', '압구정파티룸']),
     dict(id='suyu', name='수유점', key='수유', loc='수유역 8번 출구 도보 5분', cap='최대 36명 · 약 35평',
          feats=['LG 86인치 4K TV (넷플릭스·유튜브)', '비밀의 방 2개 + 부엌(인덕션)', '강북 모임은 여기서!'], tags=['수유파티룸', '강북파티룸']),
-    dict(id='gangnam', name='강남점', key='강남', loc='강남역 1번 출구 도보 5분', cap='강남 한복판 · 초역세권 파티룸',
-         feats=['우리 일행만 쓰는 단독 대관', '생일 · 동창회 · 회사 모임까지', '퇴근 후 바로 모이기 좋은 위치'], tags=['강남파티룸', '강남역파티룸'],
-         price='요금 · 예약 문의는 프로필 링크'),
+    dict(id='gangnam', name='강남점', key='강남', loc='역삼역 4번 출구 약 300m', cap='최대 78명 · 약 50평 (최대 규모)',
+         feats=['120인치 풀HD 빔프로젝터 · JBL 스피커', '아일랜드바 · 소파 라운지', '디제잉 장비 연결 가능'], tags=['강남파티룸', '역삼역파티룸']),
 ]
 
 # 날마다 바뀌는 주제 (날짜 순서대로 돌아감)
@@ -140,12 +139,9 @@ def load(item):
 
 
 def price_line(b, cfg, date):
-    if b.get('price'):
-        return b['price']
-    c = next(x for x in cfg['branches'] if x['id'] == b['id'])
-    peak = date.month in cfg.get('peakMonths', [])
-    night = c['prices']['peak' if peak else 'normal']['night'][0]  # 월~목 나이트
-    return f'{date.month}월 평일 나이트 {night // 10000}만원~'
+    import content
+    m = content.target_month(date)
+    return f"{m}월 월~목·일 나이트 {content.man(content.table_price(cfg, b['id'], m, 'night', 0))}~"
 
 
 # ---- 카드 종류 ----
@@ -259,71 +255,32 @@ def saving_numbers(cfg, date, branch_id='yeoksam'):
 
 
 def make_cards(date, outdir):
+    """요일별 콘텐츠(tools/content.py)로 카드를 만든다."""
+    import content
     cfg = get_json(f'{SITE}/api/config')
     photo_index = get_json(f'{SITE}/photos/index.json')
     day = date.toordinal()
+    fmt = content.plan(date)
     theme = THEMES[day % len(THEMES)]
-    fmt = FORMATS[day % len(FORMATS)]
-    # 표지 지점의 AI 사진 장면이 그날 주제와 다르면, 사진 장면에 맞는 주제로 바꾼다
-    lead = BRANCHES[(day // len(FORMATS)) % len(BRANCHES)] if fmt == 'branch' else BRANCHES[day % len(BRANCHES)]
-    names = [os.path.basename(f) for f in glob.glob(os.path.join(ROOT, 'ai-photos', lead['key'] + '*'))]
-    if fmt != 'saving' and names and not any(w in n for n in names for w in theme['words']):
-        theme = next((t for t in THEMES if any(w in n for n in names for w in t['words'])), theme)
     pools = {b['id']: branch_pool(b, photo_index, theme, day) for b in BRANCHES}
-    focus = BRANCHES[(day // len(FORMATS)) % len(BRANCHES)]  # branch 형식에서 소개할 지점
+    week = day // 7
+    focus = BRANCHES[week % len(BRANCHES)]
+    # 표지는 AI 사진이 있는 지점을 우선 (요일마다 돌아가며)
+    with_ai = [b for b in BRANCHES if any(x[1] for x in pools[b['id']])]
+    lead = with_ai[day % len(with_ai)] if with_ai else BRANCHES[day % len(BRANCHES)]
     used = []
 
     def take(b, k=0):
         item = pools[b['id']][min(k, len(pools[b['id']]) - 1)]
         used.append(item); return item
 
-    slides = []
-    if fmt == 'compare':  # 5개 지점 비교 카드뉴스
-        cover = BRANCHES[day % len(BRANCHES)]
-        slides.append(lambda i, n: card_cover(take(cover, 1), i, n, theme['badge'], theme['title'],
-                                              f'서울 {len(BRANCHES)}개 지점 · 단독 대관 파티룸 한눈에 보기'))
-        for b in BRANCHES:
-            slides.append(lambda i, n, b=b: card_branch(take(b), i, n, b, cfg, date))
-        last = BRANCHES[(day + 2) % len(BRANCHES)]
-        slides.append(lambda i, n: card_cta(take(last, 2), i, n))
-    elif fmt == 'branch':  # 한 지점 집중 소개
-        b = focus
-        slides.append(lambda i, n: card_cover(take(b, 0), i, n, theme['badge'], theme['title'],
-                                              f"{b['name']} · {b['loc']}"))
-        for k in range(1, 5):
-            slides.append(lambda i, n, k=k: card_photo(take(b, k), i, n))
-        slides.append(lambda i, n: card_branch(take(b, 5), i, n, b, cfg, date))
-        slides.append(lambda i, n: card_cta(take(b, 6), i, n))
-    elif fmt == 'saving':  # 회식 비용 비교
-        out_rows, in_rows = saving_numbers(cfg, date)
-        o, p_ = sum(r[2] for r in out_rows), sum(r[2] for r in in_rows)
-        yk = next(b for b in BRANCHES if b['id'] == 'yeoksam')
-        slides.append(lambda i, n: card_cover(take(yk, 0), i, n, '회식비 절약 팁',
-                                              f'회식 1·2·3차,\n파티룸 한 번에!', f'{SAVING_PEOPLE}명 기준 비용 비교'))
-        slides.append(lambda i, n: text_card(i, n, '밖에서 회식하면?', [(a, b, won_k(v)) for a, b, v in out_rows],
-                                             f'{SAVING_PEOPLE}명 합계', won_k(o), '※ 서울 강남권 일반적인 가격을 기준으로 한 예시이며, 실제 금액은 매장마다 다릅니다.', (150, 70, 50)))
-        slides.append(lambda i, n: text_card(i, n, '파티룸에서 하면?', [(a, b, won_k(v)) for a, b, v in in_rows],
-                                             f'{SAVING_PEOPLE}명 합계', won_k(p_), f"※ 아일랜드이너프 역삼점 기준 · 보증금 {cfg['deposit']:,}원 별도(이용 후 반환)"))
-        def result(i, n):
-            im = Image.new('RGBA', (W, H), GREEN); d = ImageDraw.Draw(im); header(d, i, n)
-            d.text((60, 300), '이만큼 아껴요', font=font('Bold', 56), fill=MINT)
-            d.text((60, 380), won_k(o - p_), font=font('ExtraBold', 150), fill=GOLD)
-            d.text((60, 580), f'1인당 약 {(o - p_) // SAVING_PEOPLE // 1000 * 1000:,}원 절약 ({round((o - p_) / o * 100)}%)', font=font('Bold', 48), fill='white')
-            y = 760
-            for t in ['이동 없이 한 공간에서 1·2·3차 끝', '노래 · 빔프로젝터 · 게임 무료', '우리 팀만 쓰는 단독 공간', '5시간 통째로 우리끼리']:
-                d.ellipse([62, y + 14, 82, y + 34], fill=GOLD); d.text((104, y), t, font=font('Medium', 42), fill='white'); y += 80
-            return im
-        slides.append(result)
-        slides.append(lambda i, n: card_cta(take(yk, 2), i, n))
-    else:  # gallery: 여러 지점 파티 사진 모음
-        cover = BRANCHES[day % len(BRANCHES)]
-        slides.append(lambda i, n: card_cover(take(cover, 0), i, n, theme['badge'], theme['title'],
-                                              '아일랜드이너프에서 열린 파티들'))
-        for j in range(5):
-            b = BRANCHES[(day + j) % len(BRANCHES)]
-            slides.append(lambda i, n, b=b, j=j: card_photo(take(b, 1 + (j == 0)), i, n, b['name']))
-        last = BRANCHES[(day + 3) % len(BRANCHES)]
-        slides.append(lambda i, n: card_cta(take(last, 3), i, n))
+    src = with_ai or BRANCHES
+
+    def strip(j):  # 글 카드 아래 사진: AI 사진이 있는 지점을 돌아가며
+        return take(src[j % len(src)], 1 + j // len(src))
+
+    ctx = dict(cfg=cfg, date=date, day=day, take=take, focus=focus, lead=lead, strip=strip)
+    slides, cap, tags = content.build(fmt, ctx)
 
     os.makedirs(outdir, exist_ok=True)
     for old in glob.glob(os.path.join(outdir, '*.jpg')): os.remove(old)
@@ -331,44 +288,18 @@ def make_cards(date, outdir):
     for i, make in enumerate(slides, start=1):
         make(i, n).convert('RGB').save(os.path.join(outdir, f'{i:02d}.jpg'), quality=90)
 
-    caption = make_caption(fmt, focus, theme, any(u[1] for u in used))
+    caption = make_caption(cap, tags, any(u[1] for u in used))
     with open(os.path.join(outdir, 'caption.txt'), 'w', encoding='utf-8') as f:
         f.write(caption)
-    log('format:', fmt, '| theme:', theme['badge'], '| focus:', focus['name'] if fmt == 'branch' else '-')
+    log('format:', fmt, '| lead:', lead['name'], '| focus:', focus['name'])
     return n, caption
 
 
-def make_caption(fmt, focus, theme, has_ai):
-    if fmt == 'saving':
-        lines = ['💸 회식 1차 고깃집, 2차 맥주집, 3차 노래방…',
-                 f'{SAVING_PEOPLE}명이면 비용이 얼마나 나올까요? 파티룸 한 곳에서 해결하면 얼마나 아낄 수 있는지 비교해 봤어요 👉', '',
-                 '✔ 배달 음식 · 마트 주류로 비용은 줄이고',
-                 '✔ 노래 · 빔프로젝터 · 게임은 무료로',
-                 '✔ 이동 없이 우리 팀만의 공간에서 5시간',
-                 '', '※ 밖에서 회식 금액은 서울 강남권 일반적인 가격을 기준으로 한 예시입니다.']
-        branch_tags = ['회식장소', '회식', '역삼파티룸', '선릉파티룸']
-    elif fmt == 'branch':
-        b = focus
-        lines = [theme['intro'], f"오늘은 {b['name']}을 소개합니다 👉", '',
-                 f"📍 {b['loc']}", f"👥 {b['cap']}"] + [f'✔ {f}' for f in b['feats']]
-        branch_tags = b['tags']
-    else:
-        lines = [theme['intro'],
-                 '아일랜드이너프 서울 5개 지점을 한눈에 비교해 보세요 👉' if fmt == 'compare'
-                 else '아일랜드이너프에서 열린 파티들을 모아 봤어요 👉', '']
-        for b in BRANCHES:
-            lines.append(f"📍 {b['name']} | {b['loc']}")
-        branch_tags = [t for b in BRANCHES for t in b['tags']]
-    lines += ['',
-              '✔ 예약한 시간 동안 공간 전체를 우리 일행만 단독 이용',
-              '✔ 음식 · 주류 · 배달 자유롭게 반입',
-              '✔ 평일(월~목) 할인 · 주말은 빠르게 마감 중',
-              '',
-              '연말 모임은 아일랜드이너프 파티룸에서 🥂',
-              '예약은 프로필 링크 → islandenoughpartyroom.com']
+def make_caption(lines, tags, has_ai):
+    lines = list(lines) + ['', '연말 모임은 아일랜드이너프 파티룸에서 🥂', '예약은 프로필 링크 → islandenoughpartyroom.com']
     if has_ai:
         lines += ['', '※ 일부 사진은 실제 매장 사진을 바탕으로 만든 AI 연출 이미지입니다.']
-    tags = list(dict.fromkeys(COMMON_TAGS + theme['tags'] + branch_tags))[:28]
+    tags = list(dict.fromkeys(COMMON_TAGS + tags))[:25]
     lines += ['', ' '.join('#' + t for t in tags)]
     return '\n'.join(lines)
 
