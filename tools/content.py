@@ -1,6 +1,6 @@
 """요일별 콘텐츠 (총무의 고민을 해결하는 카드뉴스).
 
-월 1인 가격 · 화 송년회 게임 · 수 남은 날짜(실시간) · 목 이거 돼요? · 금 밸런스 게임
+월 대표 캐러셀(tools/main_ad.py, 사진만 주마다 교체) · 화 송년회 게임 · 수 남은 날짜(실시간) · 목 이거 돼요? · 금 밸런스 게임
 토 실제 파티 사진(지점 집중 / 사진 모음 번갈아) · 일 총무 가이드 / D-day 번갈아
 
 숫자는 전부 홈페이지 설정(/api/config)과 예약 현황(/api/availability)에서 가져온다.
@@ -448,7 +448,7 @@ def fmt_photos(ctx, gallery):
 def plan(date):
     """요일 → 형식. 토 · 일은 주마다 번갈아."""
     wk = date.isocalendar()[1]
-    return {0: 'price', 1: 'games', 2: 'avail', 3: 'faq', 4: 'vs',
+    return {0: 'main', 1: 'games', 2: 'avail', 3: 'faq', 4: 'vs',
             5: 'gallery' if wk % 2 else 'branch',
             6: 'dday' if (wk % 2 and date.month == 12) else 'guide'}[date.weekday()]
 

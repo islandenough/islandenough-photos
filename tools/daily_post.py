@@ -254,13 +254,13 @@ def saving_numbers(cfg, date, branch_id='yeoksam'):
     return out_rows, in_rows
 
 
-def make_cards(date, outdir):
-    """요일별 콘텐츠(tools/content.py)로 카드를 만든다."""
-    import content
+def make_cards(date, outdir, fmt=None, which=None):
+    """요일별 콘텐츠(tools/content.py)로 카드를 만든다. fmt='main' 은 대표 캐러셀(tools/main_ad.py)."""
+    import content, main_ad
     cfg = get_json(f'{SITE}/api/config')
     photo_index = get_json(f'{SITE}/photos/index.json')
     day = date.toordinal()
-    fmt = content.plan(date)
+    fmt = fmt or content.plan(date)
     theme = THEMES[day % len(THEMES)]
     pools = {b['id']: branch_pool(b, photo_index, theme, day) for b in BRANCHES}
     week = day // 7
@@ -279,8 +279,11 @@ def make_cards(date, outdir):
     def strip(j):  # 글 카드 아래 사진: AI 사진이 있는 지점을 돌아가며
         return take(src[j % len(src)], 1 + j // len(src))
 
-    ctx = dict(cfg=cfg, date=date, day=day, take=take, focus=focus, lead=lead, strip=strip)
-    slides, cap, tags = content.build(fmt, ctx)
+    ctx = dict(cfg=cfg, date=date, day=day, take=take, focus=focus, lead=lead, strip=strip, photo_index=photo_index)
+    if fmt == 'main':  # 실제 사진만 사용, 주마다 사진 묶음 교체
+        slides, cap, tags = main_ad.build(ctx, week if which is None else which)
+    else:
+        slides, cap, tags = content.build(fmt, ctx)
 
     os.makedirs(outdir, exist_ok=True)
     for old in glob.glob(os.path.join(outdir, '*.jpg')): os.remove(old)
@@ -288,15 +291,17 @@ def make_cards(date, outdir):
     for i, make in enumerate(slides, start=1):
         make(i, n).convert('RGB').save(os.path.join(outdir, f'{i:02d}.jpg'), quality=90)
 
-    caption = make_caption(cap, tags, any(u[1] for u in used))
+    if callable(cap): cap = cap()
+    caption = make_caption(cap, tags, any(u[1] for u in used), footer=(fmt != 'main'))
     with open(os.path.join(outdir, 'caption.txt'), 'w', encoding='utf-8') as f:
         f.write(caption)
     log('format:', fmt, '| lead:', lead['name'], '| focus:', focus['name'])
     return n, caption
 
 
-def make_caption(lines, tags, has_ai):
-    lines = list(lines) + ['', '연말 모임은 아일랜드이너프 파티룸에서 🥂', '예약은 프로필 링크 → islandenoughpartyroom.com']
+def make_caption(lines, tags, has_ai, footer=True):
+    lines = list(lines)
+    if footer: lines += ['', '연말 모임은 아일랜드이너프 파티룸에서 🥂', '예약은 프로필 링크 → islandenoughpartyroom.com']
     if has_ai:
         lines += ['', '※ 일부 사진은 실제 매장 사진을 바탕으로 만든 AI 연출 이미지입니다.']
     tags = list(dict.fromkeys(COMMON_TAGS + tags))[:25]
@@ -376,13 +381,15 @@ def main():
     ap.add_argument('--no-publish', action='store_true')
     ap.add_argument('--local', action='store_true')
     ap.add_argument('--force', action='store_true', help='이미 게시한 날짜도 다시 게시')
+    ap.add_argument('--format', help='요일 계획 대신 이 형식으로 (예: main = 대표 캐러셀)')
+    ap.add_argument('--which', type=int, help='대표 캐러셀 사진 묶음 번호 (0 = 광고용)')
     a = ap.parse_args()
     date = dt.date.fromisoformat(a.date) if a.date else dt.datetime.now(KST).date()
-    ds = date.isoformat(); outdir = os.path.join(ROOT, 'cards', ds)
+    ds = date.isoformat() + (f'-{a.format}' if a.format else ''); outdir = os.path.join(ROOT, 'cards', ds)
     done = os.path.join(outdir, 'posted.json')
     if os.path.exists(done) and not a.force:
         log('이미 게시됨:', json.load(open(done)).get('permalink')); return
-    n, caption = make_cards(date, outdir)
+    n, caption = make_cards(date, outdir, a.format, a.which)
     log(f'cards: {outdir} ({n}장)')
     if a.local: return
     push_cards(ds)
