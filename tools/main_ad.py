@@ -80,7 +80,10 @@ def food(i, n, path):
     im.paste(crop(photo(path), W, 520), (0, 0))
     im = shade(im, 0, 170, 160, reverse=True)
     d = ImageDraw.Draw(im); header(d, i, n)
-    d.text((60, 560), 'FOOD & DRINK · 반입 자유', font=font('Bold', 32), fill=(46, 140, 100))
+    bf = font('ExtraBold', 44); bw = int(d.textlength('콜키지 0원', font=bf)) + 64
+    d.rounded_rectangle([60, 430, 60 + bw, 500], radius=35, fill=GOLD)
+    d.text((60 + bw // 2, 465), '콜키지 0원', font=bf, fill=GREEN, anchor='mm')
+    d.text((60, 560), 'FOOD & DRINK · 반입 자유 · 콜키지 0원', font=font('Bold', 32), fill=(46, 140, 100))
     t = '먹고 싶은 건 각자,\n술은 마트 가격으로.'
     d.text((60, 610), t, font=fit(d, t, 'ExtraBold', 76, W - 120), fill=GREEN, spacing=12)
     d.text((60, 815), '배민 · 쿠팡이츠로 각자 먹고 싶은 메뉴 그대로', font=font('Medium', 34), fill=INK)
@@ -214,7 +217,7 @@ def build(ctx, which=0):
                  '강남(역삼역) · 역삼(선릉역) · 양재 · 도산공원 · 수유', '',
                  f'✔ 공간 전체를 우리 일행만 단독 대관 (최대 {maxp}명)',
                  '✔ 음식 · 술 반입 자유: 배민 · 쿠팡이츠로 각자 먹고 싶은 메뉴 주문',
-                 '✔ 소주 · 맥주 · 와인 · 위스키까지 마트 가격 그대로 (식당 술값 걱정 끝)',
+                 '✔ 콜키지 0원! 소주 · 맥주 · 와인 · 위스키까지 마트 가격 그대로',
                  '✔ 빔프로젝터 · 무선 마이크 무료',
                  f"✔ {PEOPLE}명이 모이면 {price_box['head']} ({m}월 월~목·일요일 밤 5시간)", '',
                  '올해 연말 모임, 날짜만 정하면 됩니다.',
