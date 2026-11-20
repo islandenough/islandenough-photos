@@ -89,7 +89,7 @@ def food(i, n, path):
     y = chips(d, 60, y + 85, ['소주', '맥주', '와인', '위스키', '하이볼', '막걸리'], GREEN, GOLD, 32)
     d.text((60, y + 34), '식당 메뉴판 가격 말고, 배달 · 마트 가격 그대로.', font=font('Bold', 34), fill=GREEN)
     d.rounded_rectangle([60, 1190, W - 60, 1290], radius=24, fill=(236, 231, 220))
-    d.text((W // 2, 1222), '맥주잔 · 와인잔 · 오프너 준비 완료 (지점마다 다름)', font=font('Medium', 29), fill=INK, anchor='mm')
+    d.text((W // 2, 1222), '맥주잔 · 와인잔 · 오프너 준비 완료', font=font('Medium', 29), fill=INK, anchor='mm')
     d.text((W // 2, 1262), '얼음은 챙겨 오세요 · 데우기는 전자레인지 (화기 사용 불가)', font=font('Medium', 27), fill=SUB, anchor='mm')
     return im
 
@@ -111,7 +111,7 @@ def branches(i, n, cfg):
     im = Image.new('RGBA', (W, H), CREAM); d = ImageDraw.Draw(im)
     d.rectangle([0, 0, W, 170], fill=GREEN); header(d, i, n)
     d.text((60, 215), 'CHOICE · 서울 5곳', font=font('Bold', 32), fill=(46, 140, 100))
-    d.text((60, 265), '회사 근처, 집 근처.\n가까운 섬을 고르세요.', font=font('ExtraBold', 66), fill=GREEN, spacing=10)
+    d.text((60, 265), '회사 근처, 집 근처.\n가까운 지점을 고르세요.', font=font('ExtraBold', 66), fill=GREEN, spacing=10)
     y = 455
     for bid in ORDER:
         b = next(x for x in BRANCHES if x['id'] == bid); cb = cfg_branch(cfg, bid)
@@ -175,9 +175,10 @@ def cta(i, n):
         d.text((160, y), t, font=font('Bold', 44), fill='white')
         d.text((160, y + 58), s, font=font('Medium', 30), fill=(170, 200, 185))
         y += 140
-    d.rounded_rectangle([60, 1080, W - 60, 1190], radius=55, fill=GOLD)
-    d.text((W // 2, 1135), '날짜 확인하고 예약하기', font=font('ExtraBold', 46), fill=GREEN, anchor='mm')
-    d.text((W // 2, 1250), 'islandenoughpartyroom.com', font=font('Bold', 40), fill='white', anchor='mm')
+    d.rounded_rectangle([60, 1040, W - 60, 1145], radius=52, fill=GOLD)
+    d.text((W // 2, 1092), '날짜 확인하고 예약하기', font=font('ExtraBold', 46), fill=GREEN, anchor='mm')
+    d.text((W // 2, 1200), '프로필 링크를 누르면 예약 페이지로 바로 연결돼요', font=font('Bold', 34), fill=MINT, anchor='mm')
+    d.text((W // 2, 1262), 'islandenoughpartyroom.com', font=font('Bold', 38), fill='white', anchor='mm')
     return im
 
 
@@ -219,7 +220,7 @@ def build(ctx, which=0):
                  '올해 연말 모임, 날짜만 정하면 됩니다.',
                  '👇 지점별 남은 날짜와 요금은 홈페이지에서 바로 확인하세요.',
                  'islandenoughpartyroom.com (프로필 링크)', '',
-                 '🧊 맥주잔 · 와인잔 · 오프너는 준비돼 있고(지점마다 다름), 얼음은 챙겨 오세요.', '',
+                 '🧊 맥주잔 · 와인잔 · 오프너가 준비돼 있고, 얼음은 챙겨 오세요.', '',
                  f"*장소 대관료 기준이며 음식·주류는 별도입니다. 보증금 {cfg['deposit']:,}원은 이용 후 반환되며, "
                  '금·토요일과 공휴일 전날 등은 요금이 달라요.']
         return lines
