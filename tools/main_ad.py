@@ -1,6 +1,6 @@
 """대표 캐러셀 (광고 겸 매주 월요일 게시).
 
-흐름: 가고 싶다(감정) → 공간 → 지점 고르기 → 합리적이다(가격) → 예약하자.
+흐름: 가고 싶다(감정) → 먹고 싶은 것·술 → 공간 → 지점 고르기 → 합리적이다(가격) → 예약하자.
 전 지점 공통. 사진은 홈페이지의 실제 고객 파티 사진만 쓴다 (AI 사진 쓰지 않음).
 """
 import datetime as dt
@@ -13,6 +13,7 @@ from content import INK, SUB, LINE, table_price, extra_fee, cfg_branch, target_m
 # 장면별 실제 사진 (주마다 돌아가며 사용. 첫 번째가 광고용)
 HOOK = ['yeoksam/p03-a26173.jpg', 'suyu/p05-c7df04.jpg', 'yangjae/p04-181516.jpg', 'dosan/p06-94351a.jpg']
 DESIRE = ['gangnam/p15-5420ed.jpg', 'gangnam/p04-aada24.jpg', 'yeoksam/p07-9ae8ec.jpg', 'gangnam/p05-6d4b8a.jpg']
+FOOD = ['yangjae/p07-936f33.jpg', 'gangnam/p06-c9cf9c.jpg', 'yeoksam/p17-21d01b.jpg']
 VALUE = ['yangjae/p01-ed6a27.jpg', 'yeoksam/p09-694900.jpg', 'suyu/p02-0c0fb2.jpg', 'dosan/p05-9a0f74.jpg']
 
 SHORT = {  # 지점 고르기 카드용 짧은 위치
@@ -60,6 +61,36 @@ def cover(i, n, path, ev):
     d.text((60, 830), t, font=fit(d, t, 'ExtraBold', 104, W - 120), fill='white', spacing=14)
     d.text((60, 1100), '올해는 한 공간에서 우리끼리 끝까지.', font=font('Bold', 44), fill=MINT)
     d.text((60, 1240), '아일랜드이너프 · 서울 5곳 단독 대관 파티룸', font=font('Medium', 32), fill=(220, 230, 225))
+    return im
+
+
+def chips(d, x, y, words, fill, text_fill, size=36):
+    f = font('Bold', size)
+    for w in words:
+        tw = int(d.textlength(w, font=f)) + 48
+        if x + tw > W - 60: x, y = 60, y + size + 40
+        d.rounded_rectangle([x, y, x + tw, y + size + 24], radius=(size + 24) // 2, fill=fill)
+        d.text((x + tw // 2, y + (size + 24) // 2), w, font=f, fill=text_fill, anchor='mm')
+        x += tw + 14
+    return y + size + 24
+
+
+def food(i, n, path):
+    im = Image.new('RGBA', (W, H), CREAM)
+    im.paste(crop(photo(path), W, 520), (0, 0))
+    im = shade(im, 0, 170, 160, reverse=True)
+    d = ImageDraw.Draw(im); header(d, i, n)
+    d.text((60, 560), 'FOOD & DRINK · 반입 자유', font=font('Bold', 32), fill=(46, 140, 100))
+    t = '먹고 싶은 건 각자,\n술은 마트 가격으로.'
+    d.text((60, 610), t, font=fit(d, t, 'ExtraBold', 76, W - 120), fill=GREEN, spacing=12)
+    d.text((60, 815), '배민 · 쿠팡이츠로 각자 먹고 싶은 메뉴 그대로', font=font('Medium', 34), fill=INK)
+    y = chips(d, 60, 870, ['치킨', '피자', '족발·보쌈', '회', '떡볶이', '마라탕'], (232, 244, 236), GREEN, 32)
+    d.text((60, y + 30), '소주부터 위스키까지, 좋아하는 술 마음껏', font=font('Medium', 34), fill=INK)
+    y = chips(d, 60, y + 85, ['소주', '맥주', '와인', '위스키', '하이볼', '막걸리'], GREEN, GOLD, 32)
+    d.text((60, y + 34), '식당 메뉴판 가격 말고, 배달 · 마트 가격 그대로.', font=font('Bold', 34), fill=GREEN)
+    d.rounded_rectangle([60, 1190, W - 60, 1290], radius=24, fill=(236, 231, 220))
+    d.text((W // 2, 1222), '맥주잔 · 와인잔 · 오프너 준비 완료 (지점마다 다름)', font=font('Medium', 29), fill=INK, anchor='mm')
+    d.text((W // 2, 1262), '얼음은 챙겨 오세요 · 데우기는 전자레인지 (화기 사용 불가)', font=font('Medium', 27), fill=SUB, anchor='mm')
     return im
 
 
@@ -123,7 +154,7 @@ def price(i, n, cfg, m):
         d.text((W - 60, y), f'{pp:,}원', font=font('ExtraBold', 46), fill=GREEN, anchor='ra')
         y += 92
         d.line([(60, y - 18), (W - 60, y - 18)], fill=LINE, width=2)
-    notes = [f'장소 대관료 기준 (나이트 19~24시) · 음식·주류는 직접 준비',
+    notes = [f'장소 대관료 기준 (나이트 19~24시) · 음식·술은 배달·마트 가격 그대로 (별도)',
              f"보증금 {cfg['deposit']:,}원 별도 (이용 후 반환)",
              '공휴일 전날 · 금·토요일 등 날짜에 따라 요금이 달라요']
     y = 1110
@@ -166,6 +197,7 @@ def build(ctx, which=0):
         lambda i, n: cover(i, n, pick(HOOK), ev),
         lambda i, n: story(i, n, pick(DESIRE), 'DESIRE · 우리만의 밤', '먹고, 웃고, 게임하고.\n분위기 좋으면 노래까지.',
                            '회사 사람들과도, 오랜 친구들과도.'),
+        lambda i, n: food(i, n, pick(FOOD)),
         lambda i, n: value(i, n, pick(VALUE)),
         lambda i, n: branches(i, n, cfg),
         p,
@@ -180,12 +212,14 @@ def build(ctx, which=0):
                  '📍 아일랜드이너프 서울 5곳',
                  '강남(역삼역) · 역삼(선릉역) · 양재 · 도산공원 · 수유', '',
                  f'✔ 공간 전체를 우리 일행만 단독 대관 (최대 {maxp}명)',
-                 '✔ 음식 · 주류 · 배달 자유롭게 반입',
+                 '✔ 음식 · 술 반입 자유: 배민 · 쿠팡이츠로 각자 먹고 싶은 메뉴 주문',
+                 '✔ 소주 · 맥주 · 와인 · 위스키까지 마트 가격 그대로 (식당 술값 걱정 끝)',
                  '✔ 빔프로젝터 · 무선 마이크 무료',
                  f"✔ {PEOPLE}명이 모이면 {price_box['head']} ({m}월 월~목·일요일 밤 5시간)", '',
                  '올해 연말 모임, 날짜만 정하면 됩니다.',
                  '👇 지점별 남은 날짜와 요금은 홈페이지에서 바로 확인하세요.',
                  'islandenoughpartyroom.com (프로필 링크)', '',
+                 '🧊 맥주잔 · 와인잔 · 오프너는 준비돼 있고(지점마다 다름), 얼음은 챙겨 오세요.', '',
                  f"*장소 대관료 기준이며 음식·주류는 별도입니다. 보증금 {cfg['deposit']:,}원은 이용 후 반환되며, "
                  '금·토요일과 공휴일 전날 등은 요금이 달라요.']
         return lines
