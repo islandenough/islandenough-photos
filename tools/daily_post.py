@@ -195,10 +195,11 @@ def card_cta(item, i, n):
     im = shade(shade(crop(fn, W, H), 300, H, 250), 0, 170, 170, reverse=True)
     d = ImageDraw.Draw(im); header(d, i, n)
     d.text((60, 760), '연말 모임은\n아일랜드이너프\n파티룸에서', font=font('ExtraBold', 96), fill='white', spacing=12)
-    d.text((60, 1090), '· 음식·주류·배달 자유 반입   · 공간 전체 단독 이용', font=font('Medium', 34), fill=MINT)
-    d.text((60, 1140), '· 평일(월~목) 할인   · 주말은 빠르게 마감 중', font=font('Medium', 34), fill=MINT)
-    d.rounded_rectangle([60, 1210, W - 60, 1300], radius=45, fill=GOLD)
-    d.text((W // 2, 1255), '예약  islandenoughpartyroom.com', font=font('Bold', 40), fill=GREEN, anchor='mm')
+    d.text((60, 1080), '· 음식·술·배달 자유 반입   · 콜키지 0원', font=font('Medium', 34), fill=MINT)
+    d.text((60, 1128), '· 공간 전체 단독 이용   · 월~목·일요일 밤이 더 저렴', font=font('Medium', 34), fill=MINT)
+    d.rounded_rectangle([60, 1190, W - 60, 1270], radius=40, fill=GOLD)
+    d.text((W // 2, 1230), '프로필 링크에서 바로 예약하기', font=font('ExtraBold', 40), fill=GREEN, anchor='mm')
+    d.text((W // 2, 1308), 'islandenoughpartyroom.com', font=font('Bold', 30), fill='white', anchor='mm')
     if is_ai: ai_badge(d, W - 60, 740)
     return im
 
