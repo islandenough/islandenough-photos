@@ -9,7 +9,7 @@ import datetime as dt
 import math
 
 from daily_post import (BRANCHES, W, H, GREEN, MINT, CREAM, GOLD, SITE, Image, ImageDraw,
-                        font, header, get_json, card_cover, card_photo, card_cta, card_branch, load, crop, ai_badge)
+                        font, header, get_json, card_cover, card_photo, card_cta, card_branch, load, crop)
 
 INK = (32, 42, 37); SUB = (110, 120, 115); LINE = (222, 216, 204); RED = (196, 72, 52)
 WEEKDAY_KO = '월화수목금토일'
@@ -93,7 +93,6 @@ def base_card(i, n, kicker, title, bg=CREAM, dark=False, photo=None, top=900):
         fn, is_ai = load(photo)
         im.paste(crop(fn, W, H - top), (0, top))
     d = ImageDraw.Draw(im)
-    if photo is not None and is_ai: ai_badge(d, W - 40, H - 40)
     if not dark: d.rectangle([0, 0, W, 170], fill=GREEN)
     header(d, i, n)
     d.text((60, 220), kicker, font=font('Bold', 34), fill=GOLD if dark else (46, 140, 100))

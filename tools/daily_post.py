@@ -111,10 +111,6 @@ def header(d, i, n):
     d.text((W - 60, 60), f'{i:02d} / {n:02d}', font=font('SemiBold', 30), fill='white', anchor='ra')
 
 
-def ai_badge(d, x, y):
-    d.rounded_rectangle([x - 210, y - 44, x, y], radius=22, fill=(0, 0, 0))
-    d.text((x - 105, y - 22), 'AI 연출 이미지', font=font('SemiBold', 24), fill='white', anchor='mm')
-
 
 IMG_EXT = ('.jpg', '.jpeg', '.png', '.webp')
 
@@ -156,7 +152,6 @@ def card_cover(item, i, n, badge, title, sub):
     d.text((60, 850), title, font=font('ExtraBold', 108), fill='white', spacing=14)
     d.text((60, 1120), sub, font=font('Medium', 38), fill=MINT)
     d.text((60, 1230), '옆으로 넘겨 보세요  →', font=font('SemiBold', 34), fill='white')
-    if is_ai: ai_badge(d, W - 60, 1270)
     return im
 
 
@@ -167,7 +162,6 @@ def card_branch(item, i, n, b, cfg, date):
     d = ImageDraw.Draw(im); header(d, i, n)
     d.text((60, 600), b['name'], font=font('ExtraBold', 96), fill='white', anchor='ls')
     d.text((60, 660), b['loc'], font=font('SemiBold', 36), fill=MINT, anchor='ls')
-    if is_ai: ai_badge(d, W - 40, 700)
     y = 780
     d.text((60, y), b['cap'], font=font('Bold', 44), fill=GREEN); y += 90
     for f in b['feats']:
@@ -186,7 +180,6 @@ def card_photo(item, i, n, label=None):
     d = ImageDraw.Draw(im); header(d, i, n)
     if label:
         d.text((60, H - 70), label, font=font('Bold', 46), fill='white', anchor='ls')
-    if is_ai: ai_badge(d, W - 60, H - 50)
     return im
 
 
@@ -200,7 +193,6 @@ def card_cta(item, i, n):
     d.rounded_rectangle([60, 1190, W - 60, 1270], radius=40, fill=GOLD)
     d.text((W // 2, 1230), '프로필 링크에서 바로 예약하기', font=font('ExtraBold', 40), fill=GREEN, anchor='mm')
     d.text((W // 2, 1308), 'islandenoughpartyroom.com', font=font('Bold', 30), fill='white', anchor='mm')
-    if is_ai: ai_badge(d, W - 60, 740)
     return im
 
 
@@ -304,7 +296,7 @@ def make_caption(lines, tags, has_ai, footer=True):
     lines = list(lines)
     if footer: lines += ['', '연말 모임은 아일랜드이너프 파티룸에서 🥂', '예약은 프로필 링크 → islandenoughpartyroom.com']
     if has_ai:
-        lines += ['', '※ 일부 사진은 실제 매장 사진을 바탕으로 만든 AI 연출 이미지입니다.']
+        lines += ['', '※ 일부 사진은 실제 매장을 바탕으로 한 AI 연출 이미지예요.']
     tags = list(dict.fromkeys(COMMON_TAGS + tags))[:25]
     lines += ['', ' '.join('#' + t for t in tags)]
     return '\n'.join(lines)
