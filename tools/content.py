@@ -399,19 +399,19 @@ def fmt_dday(ctx):
     slides = [lambda i, n: card_cover(take(lead, 0), i, n, f'{label} 카운트다운', f'{label}까지\nD-{left}', f'남은 토요일은 {len(weekends)}번')]
 
     def wk(i, n):
-        im, d = base_card(i, n, f'{label} 전 남은 주말', f'토요일 {len(weekends)}번,\n벌써 이것뿐')
-        y = 600
+        im, d = base_card(i, n, f'{label} 전 남은 주말', f'토요일 {len(weekends)}번,\n벌써 이것뿐', photo=ctx['strip'](0), top=930)
+        y = 500
         for w in weekends:
             d.text((60, y), f'{w.month}월 {w.day}일 (토)', font=font('Bold', 46), fill=INK); y += 80
-        d.text((60, y + 40), '"언제 볼래?" 보내기 전에, 장소부터 잡아 두세요.', font=font('Medium', 36), fill=SUB)
+        d.text((60, y + 20), '"언제 볼래?" 보내기 전에, 장소부터 잡아 두세요.', font=font('Medium', 36), fill=SUB)
         return im
 
     def alt(i, n):
         b = BRANCHES[0]
-        im, d = base_card(i, n, '주말이 꽉 찼다면', '일요일 밤도\n충분히 연말')
+        im, d = base_card(i, n, '주말이 꽉 찼다면', '일요일 밤도\n충분히 연말', photo=ctx['strip'](1), top=960)
         bullet_list(d, [(f"{b['name']} {m}월 토요일 나이트", man(table_price(cfg, b['id'], m, 'night', 2))),
                         ('같은 공간 일요일 나이트', man(table_price(cfg, b['id'], m, 'night', 3))),
-                        ('다음 날 출근이 걱정되면', '데이타임(10~17시) 브런치 파티')], 560)
+                        ('다음 날 출근이 걱정되면', '데이타임(10~17시) 브런치 파티')], 490)
         return im
 
     slides += [wk, alt, lambda i, n: card_photo(take(lead, 1), i, n, lead['name']), lambda i, n: card_cta(take(lead, 2), i, n)]
@@ -449,7 +449,7 @@ def plan(date):
     wk = date.isocalendar()[1]
     return {0: 'main', 1: 'games', 2: 'avail', 3: 'faq', 4: 'vs',
             5: 'gallery' if wk % 2 else 'branch',
-            6: 'dday' if (wk % 2 and date.month == 12) else 'guide'}[date.weekday()]
+            6: 'dday' if wk % 2 == 0 and not (date.month == 12 and date.day >= 21) else 'guide'}[date.weekday()]
 
 
 def build(fmt, ctx):
